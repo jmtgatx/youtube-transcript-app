@@ -21,23 +21,36 @@ def index():
         if not video_id:
             error = "Invalid YouTube URL"
         else:
-            try:
-                # Try the selected language first
-                transcript_lines = YouTubeTranscriptApi.get_transcript(video_id, languages=[language])
-            except Exception as e:
+            cache_file = f"cache/{video_id}_{language}.txt"
+            if os.path.exists(cache_file):
+                with open(cache_file, "r", encoding="utf-8") as file:
+                    transcript = file.read()
+                    error = f"Transcript loaded from cache."
+            else:
                 try:
-                    # Fallback to any available transcript
-                    transcript_lines = YouTubeTranscriptApi.get_transcript(video_id)
-                    error = f"No transcript found in '{language}'. Showing available transcript instead."
-                except Exception as e2:
-                    # Log the traceback for debugging (not shown to user)
-                    traceback.print_exc()
-                    error = f"No transcripts available. Reason: {str(e2)}"
-                    transcript_lines = []
+                    transcript_lines = YouTubeTranscriptApi.get_transcript(video_id, languages=[language])
+                except Exception:
+                    try:
+                        transcript_lines = YouTubeTranscriptApi.get_transcript(video_id)
+                        error = f"No transcript found in '{language}'. Showing available transcript instead."
+                    except Exception as e2:
+                        import traceback
+                        traceback.print_exc()
+                        if "429" in str(e2):
+                            error = "Too many requests from this IP. Please try again later."
+                        else:
+                            error = f"No transcripts available. Reason: {str(e2)}"
+                        transcript_lines = []
 
-            transcript = "\n".join([line['text'] for line in transcript_lines])
+                transcript = "\n".join([line['text'] for line in transcript_lines])
+                # Save to cache if we have a valid transcript
+                if transcript.strip():
+                    os.makedirs("cache", exist_ok=True)
+                    with open(cache_file, "w", encoding="utf-8") as file:
+                        file.write(transcript)
 
     return render_template('index.html', transcript=transcript, error=error, video_id=video_id)
+
 
 @app.route('/download/<video_id>')
 def download_transcript(video_id):
