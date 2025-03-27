@@ -2,7 +2,8 @@ from flask import Flask, request, render_template, send_file
 from youtube_transcript_api import YouTubeTranscriptApi
 import io
 import re
-# force redeploy test
+import os
+import traceback
 
 app = Flask(__name__)
 
@@ -23,13 +24,15 @@ def index():
             try:
                 # Try the selected language first
                 transcript_lines = YouTubeTranscriptApi.get_transcript(video_id, languages=[language])
-            except:
+            except Exception as e:
                 try:
                     # Fallback to any available transcript
                     transcript_lines = YouTubeTranscriptApi.get_transcript(video_id)
                     error = f"No transcript found in '{language}'. Showing available transcript instead."
-                except Exception as e:
-                    error = f"No transcripts available: {str(e)}"
+                except Exception as e2:
+                    # Log the traceback for debugging (not shown to user)
+                    traceback.print_exc()
+                    error = f"No transcripts available. Reason: {str(e2)}"
                     transcript_lines = []
 
             transcript = "\n".join([line['text'] for line in transcript_lines])
@@ -53,6 +56,7 @@ def download_transcript(video_id):
             mimetype='text/plain'
         )
     except Exception as e:
+        traceback.print_exc()
         return f"Error downloading transcript: {str(e)}"
 
 def extract_video_id(url):
@@ -60,7 +64,5 @@ def extract_video_id(url):
     return match.group(1) if match else None
 
 if __name__ == '__main__':
-    import os
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
-
